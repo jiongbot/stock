@@ -36,28 +36,54 @@ def resample_to_timeframe(df, timeframe='1h'):
         重采样后的DataFrame
     """
     df = df.copy()
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    # 确保timestamp列存在且为datetime类型
+    if 'timestamp' not in df.columns:
+        raise ValueError("DataFrame must have 'timestamp' column")
+    
+    # 处理毫秒时间戳 - 转换为秒再转为datetime
+    timestamps = df['timestamp']
+    if timestamps.max() > 1e12:  # 毫秒时间戳
+        df['timestamp'] = pd.to_datetime(timestamps, unit='ms')
+    else:  # 秒时间戳
+        df['timestamp'] = pd.to_datetime(timestamps, unit='s')
+    
     df.set_index('timestamp', inplace=True)
+    df.sort_index(inplace=True)
+    
+    # 只保留OHLCV列
+    required_cols = ['open', 'high', 'low', 'close', 'volume']
+    available_cols = [col for col in required_cols if col in df.columns]
+    df = df[available_cols]
     
     # 重采样规则
-    if timeframe == '1h':
-        rule = '1H'
-    elif timeframe == '4h':
-        rule = '4H'
-    elif timeframe == '1d':
-        rule = '1D'
-    else:
-        rule = '15min'
+    rule_map = {
+        '15m': '15min',
+        '1h': '1H',
+        '4h': '4H', 
+        '1d': '1D'
+    }
+    rule = rule_map.get(timeframe, '1H')
     
+    # 重采样
     resampled = df.resample(rule).agg({
         'open': 'first',
         'high': 'max',
         'low': 'min',
         'close': 'last',
         'volume': 'sum'
-    }).dropna()
+    })
+    
+    # 删除OHLC中任意为NaN的行
+    resampled = resampled.dropna(subset=['open', 'high', 'low', 'close'])
+    
+    # 确保数据按时间排序
+    resampled.sort_index(inplace=True)
     
     resampled.reset_index(inplace=True)
+    
+    print(f"重采样完成: {len(df)} 行 -> {len(resampled)} 行 ({timeframe})")
+    
     return resampled
 
 
@@ -65,11 +91,26 @@ def prepare_data_advanced(df, feature_cols, target_col='target', test_size=0.2, 
     """
     高级数据准备 - 使用序列特征和更复杂的数据处理
     """
-    # 删除缺失值
-    df_clean = df.dropna()
+    # 检查输入数据
+    if df.empty:
+        raise ValueError("输入数据为空")
     
-    if len(df_clean) < 500:
-        raise ValueError(f"数据量不足: {len(df_clean)} 行")
+    if len(df) < lookback + 100:
+        raise ValueError(f"数据量不足: {len(df)} 行，需要至少 {lookback + 100} 行")
+    
+    # 检查特征列是否存在
+    missing_cols = [col for col in feature_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"缺少特征列: {missing_cols}")
+    
+    # 删除缺失值（只删除包含特征或目标为NaN的行）
+    cols_to_check = feature_cols + [target_col]
+    df_clean = df.dropna(subset=cols_to_check)
+    
+    if len(df_clean) < lookback + 50:
+        raise ValueError(f"有效数据量不足: {len(df_clean)} 行")
+    
+    print(f"数据准备: 原始 {len(df)} 行 -> 清洗后 {len(df_clean)} 行")
     
     # 添加滞后特征和滚动统计
     X_data = []
