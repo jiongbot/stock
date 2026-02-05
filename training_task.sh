@@ -1,18 +1,21 @@
 #!/bin/bash
-# 训练任务脚本 - 修复版
+# 训练任务脚本 - 使用环境变量
 
-TARGET_ACCURACY=0.85
-LOG_FILE="/home/admin/code/stock/training.log"
-RESULTS_FILE="/home/admin/code/stock/best_results.json"
-LOCK_FILE="/home/admin/code/stock/training.lock"
+# 从环境变量读取配置，或使用默认值
+PROJECT_DIR="${STOCK_PROJECT_DIR:-$(dirname $(readlink -f $0))}"
+TARGET_ACCURACY="${STOCK_TARGET_ACCURACY:-0.85}"
+LOG_FILE="${STOCK_LOG_FILE:-$PROJECT_DIR/training.log}"
+RESULTS_FILE="${STOCK_RESULTS_FILE:-$PROJECT_DIR/best_results.json}"
+LOCK_FILE="${STOCK_LOCK_FILE:-$PROJECT_DIR/training.lock}"
+MODELS_DIR="${STOCK_MODELS_DIR:-$PROJECT_DIR/models}"
 
-cd /home/admin/code/stock
+cd "$PROJECT_DIR"
 
 # 防止重复运行
 if [ -f "$LOCK_FILE" ]; then
     PID=$(cat "$LOCK_FILE")
     if ps -p "$PID" > /dev/null 2>&1; then
-        echo "$(date): 训练任务已在运行 (PID: $PID)，跳过" >> $LOG_FILE
+        echo "$(date): 训练任务已在运行 (PID: $PID)，跳过" >> "$LOG_FILE"
         exit 0
     else
         rm -f "$LOCK_FILE"
@@ -21,12 +24,18 @@ fi
 
 echo $$ > "$LOCK_FILE"
 
-echo "$(date): ========== 开始训练任务 ==========" >> $LOG_FILE
+echo "$(date): ========== 开始训练任务 ==========" >> "$LOG_FILE"
+echo "$(date): 项目目录: $PROJECT_DIR" >> "$LOG_FILE"
 
 # 检查数据
 python3 << 'EOF'
+import os
 import sys
-sys.path.append('/home/admin/code/stock')
+
+# 从环境变量获取项目路径
+project_dir = os.environ.get('STOCK_PROJECT_DIR', os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_dir)
+
 from data.fetcher import get_klines_from_db
 
 for symbol in ['BTC/USDT', 'ETH/USDT']:
@@ -45,21 +54,21 @@ PARAMS_LIST=(
 for PARAMS in "${PARAMS_LIST[@]}"; do
     IFS=':' read -r SYMBOL TIMEFRAME LOOKBACK <<< "$PARAMS"
     
-    echo "$(date): 训练 $SYMBOL - $TIMEFRAME - lookback=$LOOKBACK" >> $LOG_FILE
+    echo "$(date): 训练 $SYMBOL - $TIMEFRAME - lookback=$LOOKBACK" >> "$LOG_FILE"
     
     # 运行训练并捕获输出
     OUTPUT=$(python3 train.py --symbol "$SYMBOL" --timeframe "$TIMEFRAME" --lookback "$LOOKBACK" 2>&1)
     EXIT_CODE=$?
     
-    echo "$OUTPUT" >> $LOG_FILE
+    echo "$OUTPUT" >> "$LOG_FILE"
     
     if [ $EXIT_CODE -ne 0 ]; then
-        echo "$(date): 训练失败 (exit code: $EXIT_CODE)" >> $LOG_FILE
+        echo "$(date): 训练失败 (exit code: $EXIT_CODE)" >> "$LOG_FILE"
         continue
     fi
     
     # 检查最新结果
-    LATEST_RESULT=$(find models -name "results.json" -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
+    LATEST_RESULT=$(find "$MODELS_DIR" -name "results.json" -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
     if [ -n "$LATEST_RESULT" ] && [ -f "$LATEST_RESULT" ]; then
         ACCURACY=$(python3 -c "
 import json
@@ -72,25 +81,25 @@ except:
     print(0)
 " 2>/dev/null)
         
-        echo "$(date): $SYMBOL $TIMEFRAME 准确率: $ACCURACY" >> $LOG_FILE
+        echo "$(date): $SYMBOL $TIMEFRAME 准确率: $ACCURACY" >> "$LOG_FILE"
         
         # 检查是否达到目标
         if python3 -c "import sys; sys.exit(0 if float('$ACCURACY') >= $TARGET_ACCURACY else 1)" 2>/dev/null; then
-            echo "$(date): 达到目标准确率! $ACCURACY" >> $LOG_FILE
-            echo '{"status": "success", "accuracy": '$ACCURACY', "config": "'$SYMBOL'-'$TIMEFRAME'-'$LOOKBACK'"}' > $RESULTS_FILE
+            echo "$(date): 达到目标准确率! $ACCURACY" >> "$LOG_FILE"
+            echo '{"status": "success", "accuracy": '$ACCURACY', "config": "'$SYMBOL'-'$TIMEFRAME'-'$LOOKBACK'"}' > "$RESULTS_FILE"
             rm -f "$LOCK_FILE"
             exit 0
         fi
     fi
 done
 
-echo "$(date): 本次训练完成，未达到目标准确率" >> $LOG_FILE
+echo "$(date): 本次训练完成，未达到目标准确率" >> "$LOG_FILE"
 
 # 检查运行次数
-RUN_COUNT=$(grep "开始训练任务" $LOG_FILE 2>/dev/null | wc -l)
+RUN_COUNT=$(grep "开始训练任务" "$LOG_FILE" 2>/dev/null | wc -l)
 if [ "$RUN_COUNT" -ge 50 ]; then
-    echo "$(date): 达到最大运行次数 ($RUN_COUNT)，停止任务" >> $LOG_FILE
-    echo '{"status": "stopped", "reason": "max_runs_reached", "runs": '$RUN_COUNT'}' > $RESULTS_FILE
+    echo "$(date): 达到最大运行次数 ($RUN_COUNT)，停止任务" >> "$LOG_FILE"
+    echo '{"status": "stopped", "reason": "max_runs_reached", "runs": '$RUN_COUNT'}' > "$RESULTS_FILE"
     rm -f "$LOCK_FILE"
     exit 1
 fi

@@ -1,8 +1,23 @@
 """
-改进的模型训练脚本 - 使用更长的预测周期和集成学习
+改进的模型训练脚本 - 使用环境变量配置路径
 """
+import os
 import sys
-sys.path.append('/home/admin/code/stock')
+
+# 获取项目根目录（脚本所在目录的父目录）
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# 从环境变量读取配置，或使用默认值
+MODELS_DIR = os.environ.get('STOCK_MODELS_DIR', os.path.join(PROJECT_ROOT, 'models'))
+DATA_DIR = os.environ.get('STOCK_DATA_DIR', os.path.join(PROJECT_ROOT, 'data'))
+DB_PATH = os.environ.get('STOCK_DB_PATH', os.path.join(DATA_DIR, 'crypto_data.db'))
+
+# 确保目录存在
+os.makedirs(MODELS_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# 添加项目路径
+sys.path.insert(0, PROJECT_ROOT)
 
 import pandas as pd
 import numpy as np
@@ -12,16 +27,11 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, GridSearchCV, TimeSeriesSplit
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
 import joblib
-import os
 import json
 from datetime import datetime
 
 from data.fetcher import get_klines_from_db, download_historical_data
 from features.enhanced import calculate_features, get_feature_columns
-
-# 模型保存路径
-MODELS_DIR = os.path.join(os.path.dirname(__file__), 'models')
-os.makedirs(MODELS_DIR, exist_ok=True)
 
 
 def resample_to_timeframe(df, timeframe='1h'):
@@ -188,8 +198,7 @@ def train_random_forest_advanced(X_train, y_train, X_test, y_test):
         cv=tscv,
         scoring='f1',
         n_jobs=-1,
-        verbose=1,
-        n_iter=20  # 随机搜索20种组合
+        verbose=1
     )
     
     grid_search.fit(X_train, y_train)
@@ -234,8 +243,7 @@ def train_gradient_boosting_advanced(X_train, y_train, X_test, y_test):
         cv=tscv,
         scoring='f1',
         n_jobs=-1,
-        verbose=1,
-        n_iter=20
+        verbose=1
     )
     
     grid_search.fit(X_train, y_train)

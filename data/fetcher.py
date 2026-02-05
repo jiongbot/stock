@@ -10,9 +10,9 @@ import os
 import time
 import json
 
-# 数据库路径
-DB_PATH = os.path.join(os.path.dirname(__file__), 'crypto_data.db')
-BINANCE_API = "https://api.binance.com"
+# 从环境变量读取配置，或使用默认值
+DB_PATH = os.environ.get('STOCK_DB_PATH', os.path.join(os.path.dirname(__file__), 'crypto_data.db'))
+BINANCE_API = os.environ.get('BINANCE_API_URL', "https://api.binance.com")
 
 def get_db_connection():
     """获取数据库连接"""

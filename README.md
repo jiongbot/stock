@@ -12,6 +12,23 @@
 
 ## 快速开始
 
+### 配置环境变量（可选）
+
+```bash
+# 复制环境变量模板
+cp .env.example .env
+
+# 编辑配置（可选）
+vim .env
+```
+
+支持的环境变量：
+- `STOCK_PROJECT_DIR` - 项目根目录
+- `STOCK_DATA_DIR` - 数据目录
+- `STOCK_DB_PATH` - 数据库路径
+- `STOCK_MODELS_DIR` - 模型保存目录
+- `STOCK_TARGET_ACCURACY` - 目标准确率（默认0.85）
+
 ### 安装依赖
 
 ```bash
