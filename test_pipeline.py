@@ -8,7 +8,7 @@ sys.path.append('/home/admin/code/stock')
 import pandas as pd
 from data.fetcher import get_klines_from_db, download_historical_data
 from features.enhanced import calculate_features, get_feature_columns
-from train_v2 import resample_to_timeframe, prepare_data_advanced
+from train import resample_to_timeframe, prepare_data_advanced
 
 def test_data_pipeline():
     """测试完整数据流程"""

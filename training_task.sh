@@ -48,7 +48,7 @@ for PARAMS in "${PARAMS_LIST[@]}"; do
     echo "$(date): 训练 $SYMBOL - $TIMEFRAME - lookback=$LOOKBACK" >> $LOG_FILE
     
     # 运行训练并捕获输出
-    OUTPUT=$(python3 train_v2.py --symbol "$SYMBOL" --timeframe "$TIMEFRAME" --lookback "$LOOKBACK" 2>&1)
+    OUTPUT=$(python3 train.py --symbol "$SYMBOL" --timeframe "$TIMEFRAME" --lookback "$LOOKBACK" 2>&1)
     EXIT_CODE=$?
     
     echo "$OUTPUT" >> $LOG_FILE
